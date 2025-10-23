@@ -87,7 +87,7 @@ void update(f32 const* data, f32* prev_data, f32 time, f32 delta, f32 cursor_x, 
 		x = (x - .5) * SCALE;
 		y = (y - .5*((f32)height / width)) * SCALE;
 		f32 force = FACTOR * (__expf(-.5*distance_squared(x, y, cursor_x, cursor_y) / (STANDARD_DEVIATION*STANDARD_DEVIATION)))
-			* __sinf(ANGULAR_FREQUENCY*time);
+			* -__sinf(ANGULAR_FREQUENCY*time);
 		f32 value = wave_step(data, prev_data, delta, screen_x, screen_y, width, height, force);
 		prev_data[3*i] = value;
 		prev_data[3*i+1] = 0.0f;
@@ -95,18 +95,53 @@ void update(f32 const* data, f32* prev_data, f32 time, f32 delta, f32 cursor_x, 
 	}
 }
 
+struct RGBColor {
+	f32 r;
+	f32 g;
+	f32 b;
+};
+
+__device__
+RGBColor HSVtoRGB(f32 h, f32 s, f32 v) {
+    f32 r, g, b, f, p, q, t;
+	int i;
+    i = floor(h * 6);
+    f = h * 6 - i;
+    p = v * (1 - s);
+    q = v * (1 - f * s);
+    t = v * (1 - (1 - f) * s);
+    switch (i % 6) {
+        case 0: r = v, g = t, b = p; break;
+        case 1: r = q, g = v, b = p; break;
+        case 2: r = p, g = v, b = t; break;
+        case 3: r = p, g = q, b = v; break;
+        case 4: r = t, g = p, b = v; break;
+        case 5: r = v, g = p, b = q; break;
+    }
+
+	auto result = RGBColor{};
+	result.r = r;
+	result.g = g;
+	result.b = b;
+	return result;
+}
+
 __global__
 void update_framebuffer(f32 const* data, f32* buffer, int width, int height) {
 	for (int i = threadIdx.x + blockIdx.x * blockDim.x; i < width*height; i += gridDim.x * blockDim.x) {
-		if (data[3*i] >= 0.0f) {
-			buffer[3*i] = fabs(data[3*i]);
-			buffer[3*i+1] = 0.0f;
-			buffer[3*i+2] = 0.0f;
-		} else {
-			buffer[3*i] = 0.0f;
-			buffer[3*i+1] = 0.0f;
-			buffer[3*i+2] = fabs(data[3*i]);
-		}
+		auto color = HSVtoRGB(.67*((1.+data[3*i]) / 2.), fabs(data[3*i])*.5+.5, 1.0f);
+		buffer[3*i] = color.r;
+		buffer[3*i+1] = color.g;
+		buffer[3*i+2] = color.b;
+		// if (data[3*i] >= 0.0f) {
+		// 	buffer[3*i] = fabs(data[3*i]);
+		// 	buffer[3*i+1] = 0.0f;
+		// 	buffer[3*i+2] = 0.0f;
+		// } else {
+		// 	buffer[3*i] = 0.0f;
+		// 	buffer[3*i+1] = 0.0f;
+		// 	buffer[3*i+2] = fabs(data[3*i]);
+		// }
 	}
 }
 
