@@ -1,0 +1,7 @@
+-Werror
+-Wall
+-pedantic
+--std
+c++11
+-I
+../include
